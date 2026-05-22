@@ -55,7 +55,7 @@ echo "=== Step 2: Deploying to all VMs in parallel ==="
 PIDS=()
 VM_NAMES_LIST=()
 
-deploy_vm "proxy"    "10.0.0.6"  "proxymngr" "80/tcp,443/tcp,8443/tcp" "0"  & PIDS+=($!); VM_NAMES_LIST+=("proxy")
+deploy_vm "proxy"    "10.0.0.6"  "proxymngr" "80/tcp,81/tcp,443/tcp,8443/tcp" "0"  & PIDS+=($!); VM_NAMES_LIST+=("proxy")
 deploy_vm "immich"   "10.0.0.22" "photos"    ""                         "15" & PIDS+=($!); VM_NAMES_LIST+=("immich")
 deploy_vm "vpn"      "10.0.0.19" "vpn"       "51820/udp"               "30" & PIDS+=($!); VM_NAMES_LIST+=("vpn")
 deploy_vm "openclaw" "10.0.0.24" "claw"      ""                         "45" & PIDS+=($!); VM_NAMES_LIST+=("openclaw")
