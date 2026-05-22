@@ -12,16 +12,34 @@ source "$CONF"
 
 log "=== Monthly script self-update from ${REPO_URL} ==="
 
-for script in weekly-upgrade disk-monitor security-audit self-update; do
-  if curl -fsSL "${REPO_URL}/${script}.sh" -o "/tmp/vm-watchdog-${script}.sh" 2>>"$LOG"; then
-    if [[ -s "/tmp/vm-watchdog-${script}.sh" ]]; then
-      install -m 750 "/tmp/vm-watchdog-${script}.sh" "/usr/local/sbin/${script}.sh"
+download_with_retry() {
+  local url="$1" dest="$2"
+  local attempt
+  for attempt in 1 2 3; do
+    if curl -fsSL "$url" -o "$dest" 2>>"$LOG"; then
+      return 0
+    fi
+    log "  download attempt ${attempt}/3 failed for ${url}"
+    [[ $attempt -lt 3 ]] && sleep 300
+  done
+  return 1
+}
+
+for script in cron-wrapper weekly-upgrade disk-monitor security-audit self-update; do
+  TMP=$(mktemp "/tmp/vm-watchdog-${script}.XXXXXX")
+  if download_with_retry "${REPO_URL}/${script}.sh" "$TMP"; then
+    if [[ -s "$TMP" ]] && head -1 "$TMP" | grep -q '^#!'; then
+      chmod 750 "$TMP"
+      mv "$TMP" "/usr/local/sbin/${script}.sh"
       log "  updated: ${script}.sh"
+    else
+      log "  WARNING: ${script}.sh download invalid (empty or missing shebang) — keeping existing"
+      rm -f "$TMP"
     fi
   else
-    log "  WARNING: failed to download ${script}.sh — keeping existing version"
+    log "  WARNING: failed to download ${script}.sh after 3 attempts — keeping existing"
+    rm -f "$TMP"
   fi
-  rm -f "/tmp/vm-watchdog-${script}.sh"
 done
 
 log "=== Self-update complete ==="

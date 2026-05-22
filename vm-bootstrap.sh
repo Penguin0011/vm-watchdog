@@ -13,6 +13,8 @@ set -euo pipefail
 #         --lan-subnet "10.0.0.0/8" \
 #         --extra-ports "80/tcp,443/tcp"   # optional
 #         --cron-minute 0                  # optional (0-59, stagger weekly upgrades)
+#
+# On re-run: --alert-url may be omitted if /etc/vm-maintenance.conf already exists.
 
 VM_HOSTNAME=""
 ALERT_URL=""
@@ -34,14 +36,35 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Preserve existing ALERT_URL from conf if not supplied (safe re-run without token)
+if [[ -z "$ALERT_URL" && -f /etc/vm-maintenance.conf ]]; then
+  ALERT_URL=$(grep '^ALERT_URL=' /etc/vm-maintenance.conf | cut -d= -f2-)
+fi
+
 [[ -z "$VM_HOSTNAME" ]] && { echo "ERROR: --hostname required" >&2; exit 1; }
-[[ -z "$ALERT_URL"   ]] && { echo "ERROR: --alert-url required" >&2; exit 1; }
+[[ -z "$ALERT_URL"   ]] && { echo "ERROR: --alert-url required (no existing conf found)" >&2; exit 1; }
 [[ -z "$REPO_RAW"    ]] && { echo "ERROR: --repo required" >&2; exit 1; }
 [[ -z "$LAN_SUBNET"  ]] && { echo "ERROR: --lan-subnet required" >&2; exit 1; }
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] [bootstrap] $*" | tee -a "$LOG"; }
 
 log "=== Bootstrap start: hostname=${VM_HOSTNAME} extra_ports=${EXTRA_PORTS:-none} ==="
+
+# Capture extra SSH subnets from existing UFW rules before resetting (preserves manual additions)
+SSH_EXTRA_SUBNETS=""
+if ufw status 2>/dev/null | grep -q "^Status: active"; then
+  SSH_EXTRA_SUBNETS=$(ufw status 2>/dev/null \
+    | grep -E "22/tcp.*ALLOW" \
+    | awk '{print $NF}' \
+    | grep -v "^${LAN_SUBNET}$" \
+    | grep -v "^Anywhere$" \
+    | grep -v ':' \
+    | tr '\n' ',' | sed 's/,$//')
+  [[ -n "$SSH_EXTRA_SUBNETS" ]] && log "  Preserving extra SSH subnets: ${SSH_EXTRA_SUBNETS}"
+fi
+
+# Derive staggered reboot time from cron minute (minute=0 → 02:00, minute=15 → 02:15, etc.)
+REBOOT_TIME="02:$(printf '%02d' "$CRON_MINUTE")"
 
 # 1. Packages
 log "[1/7] Installing packages"
@@ -53,6 +76,13 @@ ufw --force reset
 ufw default deny incoming
 ufw default allow outgoing
 ufw allow from "$LAN_SUBNET" to any port 22 proto tcp comment "SSH LAN"
+if [[ -n "${SSH_EXTRA_SUBNETS:-}" ]]; then
+  IFS=',' read -ra EXTRA_SSH <<< "$SSH_EXTRA_SUBNETS"
+  for subnet in "${EXTRA_SSH[@]}"; do
+    ufw allow from "$subnet" to any port 22 proto tcp comment "SSH extra"
+    log "  ufw: restored SSH from ${subnet}"
+  done
+fi
 if [[ -n "$EXTRA_PORTS" ]]; then
   IFS=',' read -ra PORTS <<< "$EXTRA_PORTS"
   for entry in "${PORTS[@]}"; do
@@ -82,19 +112,19 @@ systemctl enable fail2ban
 systemctl restart fail2ban
 
 # 4. unattended-upgrades auto-reboot drop-in
-log "[4/7] Configuring unattended-upgrades auto-reboot"
+log "[4/7] Configuring unattended-upgrades auto-reboot (reboot at ${REBOOT_TIME})"
 DEBIAN_FRONTEND=noninteractive apt-get install -y -q unattended-upgrades
-cat > /etc/apt/apt.conf.d/52unattended-upgrades-local << 'UUEOF'
+cat > /etc/apt/apt.conf.d/52unattended-upgrades-local << UUEOF
 Unattended-Upgrade::Automatic-Reboot "true";
 Unattended-Upgrade::Automatic-Reboot-WithUsers "false";
-Unattended-Upgrade::Automatic-Reboot-Time "02:00";
+Unattended-Upgrade::Automatic-Reboot-Time "${REBOOT_TIME}";
 UUEOF
 systemctl enable unattended-upgrades
 systemctl start unattended-upgrades
 
 # 5. Install helper scripts from repo
 log "[5/7] Installing helper scripts"
-for script in weekly-upgrade disk-monitor security-audit self-update; do
+for script in cron-wrapper weekly-upgrade disk-monitor security-audit self-update; do
   curl -fsSL "${REPO_RAW}/${script}.sh" -o "/tmp/vm-watchdog-${script}.sh"
   [[ -s "/tmp/vm-watchdog-${script}.sh" ]] || { log "ERROR: failed to download ${script}.sh"; exit 1; }
   install -m 750 "/tmp/vm-watchdog-${script}.sh" "/usr/local/sbin/${script}.sh"
@@ -108,16 +138,16 @@ SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
 # Disk space check + Uptime Kuma heartbeat (every 6 hours)
-0 */6 * * *   root  /usr/local/sbin/disk-monitor.sh
+0 */6 * * *   root  /usr/local/sbin/cron-wrapper.sh /usr/local/sbin/disk-monitor.sh
 
 # Daily security audit
-30 4 * * *    root  /usr/local/sbin/security-audit.sh
+30 4 * * *    root  /usr/local/sbin/cron-wrapper.sh /usr/local/sbin/security-audit.sh
 
 # Weekly full apt upgrade (Sunday 3am, minute staggered per VM)
-${CRON_MINUTE} 3 * * 0  root  /usr/local/sbin/weekly-upgrade.sh
+${CRON_MINUTE} 3 * * 0  root  /usr/local/sbin/cron-wrapper.sh /usr/local/sbin/weekly-upgrade.sh
 
 # Monthly script self-update from repo
-0 4 1 * *     root  /usr/local/sbin/self-update.sh
+0 4 1 * *     root  /usr/local/sbin/cron-wrapper.sh /usr/local/sbin/self-update.sh
 CRONEOF
 chmod 644 /etc/cron.d/vm-maintenance
 
@@ -129,6 +159,8 @@ ALERT_URL=${ALERT_URL}
 DISK_THRESHOLD=85
 REPO_URL=${REPO_RAW}
 LAN_SUBNET=${LAN_SUBNET}
+SSH_EXTRA_SUBNETS=${SSH_EXTRA_SUBNETS}
+REBOOT_TIME=${REBOOT_TIME}
 CONFEOF
 chmod 600 /etc/vm-maintenance.conf
 
