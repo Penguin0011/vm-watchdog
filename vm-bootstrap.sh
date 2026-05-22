@@ -10,7 +10,7 @@ set -euo pipefail
 #                       --extra-ports "80/tcp,443/tcp" --cron-minute 0
 
 REPO_RAW="https://raw.githubusercontent.com/Penguin0011/Vm-watchdog/main"
-LAN_SUBNET="10.0.0.0/24"
+LAN_SUBNET="10.0.0.0/8"
 VM_HOSTNAME=""
 ALERT_URL=""
 EXTRA_PORTS=""
