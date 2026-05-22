@@ -29,7 +29,7 @@ export UPTIME_HOST UPTIME_USER UPTIME_PASS UPTIME_BASE_URL \
 bash "${SCRIPT_DIR}/create-monitors.sh" > "$TOKENS_FILE"
 echo ""
 
-SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -o PubkeyAuthentication=no -o PasswordAuthentication=yes"
+SSH_OPTS="-n -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -o PubkeyAuthentication=no -o PasswordAuthentication=yes"
 
 deploy_vm() {
   local name="$1" ip="$2" user="$3" extra_ports="$4" cron_minute="$5"

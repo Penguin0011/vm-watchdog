@@ -27,6 +27,7 @@ ssh_exec() {
   SSHPASS="$UPTIME_PASS" sshpass -e ssh \
     -o StrictHostKeyChecking=accept-new \
     -o ConnectTimeout=10 \
+    -n \
     "${UPTIME_USER}@${UPTIME_HOST}" "$@"
 }
 
