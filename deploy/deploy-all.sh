@@ -29,7 +29,7 @@ export UPTIME_HOST UPTIME_USER UPTIME_PASS UPTIME_BASE_URL \
 bash "${SCRIPT_DIR}/create-monitors.sh" > "$TOKENS_FILE"
 echo ""
 
-SSH_OPTS="-n -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -o PubkeyAuthentication=no -o PasswordAuthentication=yes"
+SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -o PubkeyAuthentication=no -o PasswordAuthentication=yes"
 
 deploy_vm() {
   local name="$1" ip="$2" user="$3" extra_ports="$4" cron_minute="$5"
@@ -76,8 +76,6 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   vm_index=$(( vm_index + 1 ))
 done < "$VMS_CONF"
 
-rm -f "$TOKENS_FILE"
-
 if [[ ${#PIDS[@]} -eq 0 ]]; then
   echo "ERROR: no VMs found in vms.conf"
   exit 1
@@ -101,6 +99,8 @@ done
 
 echo ""
 echo "=== Deploy summary: $(( ${#VM_NAMES_LIST[@]} - FAILURES ))/${#VM_NAMES_LIST[@]} succeeded ==="
+
+rm -f "$TOKENS_FILE"
 
 if [[ $FAILURES -gt 0 ]]; then
   echo "Check logs in /tmp/vm-watchdog-deploy-*.log for details"
