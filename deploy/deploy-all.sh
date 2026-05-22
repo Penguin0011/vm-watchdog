@@ -31,7 +31,7 @@ for name in proxy immich vpn openclaw; do
   [[ -n "$tok" ]] || { echo "ERROR: no push token for $name"; exit 1; }
 done
 
-SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=15"
+SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -o PubkeyAuthentication=no -o PasswordAuthentication=yes"
 
 deploy_vm() {
   local name="$1" ip="$2" user="$3" extra_ports="$4" cron_minute="$5"
@@ -44,8 +44,9 @@ deploy_vm() {
 
   echo "[$(date '+%H:%M:%S')] Starting deploy → ${name} (${ip})"
 
+  # echo pipes sudo password via -S; curl fetches bootstrap and runs as root
   SSHPASS="$VM_PASS" sshpass -e ssh $SSH_OPTS "${user}@${ip}" \
-    "curl -fsSL '${REPO_RAW}/vm-bootstrap.sh' | sudo bash -s -- ${bootstrap_args}" \
+    "echo '${VM_PASS}' | sudo -S bash -c 'curl -fsSL \"${REPO_RAW}/vm-bootstrap.sh\" | bash -s -- ${bootstrap_args}'" \
     > "$logfile" 2>&1
 }
 
