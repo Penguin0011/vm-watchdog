@@ -1,0 +1,17 @@
+# VM inventory for Vm-watchdog
+# Copy to vms.conf and fill in your values. vms.conf is gitignored.
+#
+# Format: name:ip:ssh_user:extra_ufw_ports
+#   name           — short hostname used for monitoring labels and logs
+#   ip             — SSH-reachable IP address
+#   ssh_user       — SSH username (must have sudo access)
+#   extra_ufw_ports — comma-separated ports to open publicly (e.g. 80/tcp,443/tcp)
+#                    leave empty for SSH-only VMs
+#
+# Lines starting with # are ignored.
+
+# Examples:
+# proxy:192.168.1.10:admin:80/tcp,81/tcp,443/tcp
+# mediaserver:192.168.1.11:ubuntu:
+# vpn:192.168.1.12:vpn:51820/udp
+# homelab:192.168.1.13:user:8080/tcp

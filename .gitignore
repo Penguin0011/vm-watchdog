@@ -1,3 +1,4 @@
 deploy/creds.env
+deploy/vms.conf
 *.log
 .DS_Store

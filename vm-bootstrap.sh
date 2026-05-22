@@ -1,18 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Run as root on any Ubuntu VM to install the Vm-watchdog maintenance system.
-# Idempotent — safe to re-run.
+# Idempotent bootstrap for any Ubuntu VM.
+# Run as root. Safe to re-run.
 #
 # Usage:
-#   curl -sSL https://raw.githubusercontent.com/Penguin0011/Vm-watchdog/main/vm-bootstrap.sh \
-#     | sudo bash -s -- --hostname proxy --alert-url "https://uptime.clouddev.dad/api/push/TOKEN" \
-#                       --extra-ports "80/tcp,443/tcp" --cron-minute 0
+#   curl -sSL https://raw.githubusercontent.com/YOUR-USER/Vm-watchdog/main/vm-bootstrap.sh \
+#     | sudo bash -s -- \
+#         --hostname myvm \
+#         --alert-url "https://uptime.example.com/api/push/TOKEN" \
+#         --repo "https://raw.githubusercontent.com/YOUR-USER/Vm-watchdog/main" \
+#         --lan-subnet "10.0.0.0/8" \
+#         --extra-ports "80/tcp,443/tcp"   # optional
+#         --cron-minute 0                  # optional (0-59, stagger weekly upgrades)
 
-REPO_RAW="https://raw.githubusercontent.com/Penguin0011/Vm-watchdog/main"
-LAN_SUBNET="10.0.0.0/8"
 VM_HOSTNAME=""
 ALERT_URL=""
+REPO_RAW=""
+LAN_SUBNET=""
 EXTRA_PORTS=""
 CRON_MINUTE="0"
 LOG="/var/log/vm-maintenance.log"
@@ -21,6 +26,8 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --hostname)    VM_HOSTNAME="$2";   shift 2 ;;
     --alert-url)   ALERT_URL="$2";     shift 2 ;;
+    --repo)        REPO_RAW="$2";      shift 2 ;;
+    --lan-subnet)  LAN_SUBNET="$2";    shift 2 ;;
     --extra-ports) EXTRA_PORTS="$2";   shift 2 ;;
     --cron-minute) CRON_MINUTE="$2";   shift 2 ;;
     *) echo "Unknown arg: $1" >&2; exit 1 ;;
@@ -29,6 +36,8 @@ done
 
 [[ -z "$VM_HOSTNAME" ]] && { echo "ERROR: --hostname required" >&2; exit 1; }
 [[ -z "$ALERT_URL"   ]] && { echo "ERROR: --alert-url required" >&2; exit 1; }
+[[ -z "$REPO_RAW"    ]] && { echo "ERROR: --repo required" >&2; exit 1; }
+[[ -z "$LAN_SUBNET"  ]] && { echo "ERROR: --lan-subnet required" >&2; exit 1; }
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] [bootstrap] $*" | tee -a "$LOG"; }
 
@@ -43,7 +52,7 @@ log "[2/7] Configuring ufw"
 ufw --force reset
 ufw default deny incoming
 ufw default allow outgoing
-ufw allow from "$LAN_SUBNET" to any port 22 proto tcp comment "SSH LAN-only"
+ufw allow from "$LAN_SUBNET" to any port 22 proto tcp comment "SSH LAN"
 if [[ -n "$EXTRA_PORTS" ]]; then
   IFS=',' read -ra PORTS <<< "$EXTRA_PORTS"
   for entry in "${PORTS[@]}"; do
@@ -83,8 +92,8 @@ UUEOF
 systemctl enable unattended-upgrades
 systemctl start unattended-upgrades
 
-# 5. Install helper scripts from GitHub
-log "[5/7] Installing helper scripts from GitHub"
+# 5. Install helper scripts from repo
+log "[5/7] Installing helper scripts"
 for script in weekly-upgrade disk-monitor security-audit self-update; do
   curl -fsSL "${REPO_RAW}/${script}.sh" -o "/tmp/vm-watchdog-${script}.sh"
   [[ -s "/tmp/vm-watchdog-${script}.sh" ]] || { log "ERROR: failed to download ${script}.sh"; exit 1; }
@@ -107,7 +116,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 # Weekly full apt upgrade (Sunday 3am, minute staggered per VM)
 ${CRON_MINUTE} 3 * * 0  root  /usr/local/sbin/weekly-upgrade.sh
 
-# Monthly script self-update from GitHub (1st of month, 4am)
+# Monthly script self-update from repo
 0 4 1 * *     root  /usr/local/sbin/self-update.sh
 CRONEOF
 chmod 644 /etc/cron.d/vm-maintenance
@@ -118,6 +127,8 @@ cat > /etc/vm-maintenance.conf << CONFEOF
 VM_HOSTNAME=${VM_HOSTNAME}
 ALERT_URL=${ALERT_URL}
 DISK_THRESHOLD=85
+REPO_URL=${REPO_RAW}
+LAN_SUBNET=${LAN_SUBNET}
 CONFEOF
 chmod 600 /etc/vm-maintenance.conf
 
