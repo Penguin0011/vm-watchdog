@@ -39,7 +39,7 @@ create_or_get_monitor() {
   local monitor_name="Watchdog - ${key}"
 
   local existing_token
-  existing_token=$(db_query "SELECT push_token FROM monitor WHERE name='${monitor_name}' AND type='push' LIMIT 1;" 2>/dev/null || true)
+  existing_token=$(db_query "SELECT push_token FROM monitor WHERE LOWER(name)=LOWER('${monitor_name}') AND type='push' LIMIT 1;" 2>/dev/null || true)
 
   if [[ -n "$existing_token" ]]; then
     echo "  [skip] '${monitor_name}' already exists" >&2
@@ -56,7 +56,7 @@ create_or_get_monitor() {
   local notif_row_id
   notif_row_id=$(db_query "SELECT COALESCE(MAX(id),0)+1 FROM monitor_notification;" 2>/dev/null)
 
-  db_query "INSERT INTO monitor_notification (id, monitor_id, notification_id) VALUES (${notif_row_id}, ${monitor_id}, ${NOTIFICATION_ID});" 2>/dev/null
+  db_query "INSERT INTO monitor_notification (id, monitor_id, notification_id) VALUES (${notif_row_id}, ${monitor_id}, ${NOTIFICATION_ID});" 2>/dev/null || true
 
   echo "  [created] '${monitor_name}' → token: ${token}" >&2
   echo "${key}=${token}"

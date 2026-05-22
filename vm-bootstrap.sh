@@ -55,10 +55,8 @@ SSH_EXTRA_SUBNETS=""
 if ufw status 2>/dev/null | grep -q "^Status: active"; then
   SSH_EXTRA_SUBNETS=$(ufw status 2>/dev/null \
     | grep -E "22/tcp.*ALLOW" \
-    | awk '{print $NF}' \
+    | grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}(/[0-9]{1,2})?' \
     | grep -v "^${LAN_SUBNET}$" \
-    | grep -v "^Anywhere$" \
-    | grep -v ':' \
     | tr '\n' ',' | sed 's/,$//')
   [[ -n "$SSH_EXTRA_SUBNETS" ]] && log "  Preserving extra SSH subnets: ${SSH_EXTRA_SUBNETS}"
 fi
