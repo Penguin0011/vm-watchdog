@@ -22,7 +22,7 @@ Security hardening applied once:
 curl -sSL https://raw.githubusercontent.com/Penguin0011/Vm-watchdog/main/vm-bootstrap.sh \
   | sudo bash -s -- \
     --hostname myhostname \
-    --alert-url "https://uptime.clouddev.dad/api/push/YOUR_TOKEN" \
+    --alert-url "https://uptime.website.com/api/push/YOUR_TOKEN" \
     --extra-ports "80/tcp,443/tcp" \   # optional
     --cron-minute 0                    # optional, stagger weekly upgrades
 ```
@@ -39,7 +39,7 @@ bash deploy-all.sh
 
 `deploy-all.sh` will:
 1. Create Uptime Kuma push monitors (Telegram notification auto-attached)
-2. Deploy to all 4 VMs in parallel
+2. Deploy to VMs in parallel
 
 ## Logs
 
