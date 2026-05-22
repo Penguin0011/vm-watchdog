@@ -45,14 +45,9 @@ deploy_vm() {
 
   echo "[$(date '+%H:%M:%S')] Starting deploy → ${name} (${ip})"
 
-  if [[ "$ip" == "LOCAL" ]]; then
-    sudo bash -c "curl -fsSL '${REPO_RAW}/vm-bootstrap.sh' | bash -s -- ${bootstrap_args}" \
-      > "$logfile" 2>&1
-  else
-    SSHPASS="$VM_PASS" sshpass -e ssh $SSH_OPTS "${user}@${ip}" \
-      "curl -fsSL '${REPO_RAW}/vm-bootstrap.sh' | sudo bash -s -- ${bootstrap_args}" \
-      > "$logfile" 2>&1
-  fi
+  SSHPASS="$VM_PASS" sshpass -e ssh $SSH_OPTS "${user}@${ip}" \
+    "curl -fsSL '${REPO_RAW}/vm-bootstrap.sh' | sudo bash -s -- ${bootstrap_args}" \
+    > "$logfile" 2>&1
 }
 
 PIDS=()
@@ -61,7 +56,7 @@ VM_NAMES=()
 deploy_vm "proxy"    "10.0.0.6"  "proxymngr" "80/tcp,443/tcp,8443/tcp" "0"  & PIDS+=($!); VM_NAMES+=("proxy")
 deploy_vm "immich"   "10.0.0.22" "photos"    ""                         "15" & PIDS+=($!); VM_NAMES+=("immich")
 deploy_vm "vpn"      "10.0.0.19" "vpn"       "51820/udp"               "30" & PIDS+=($!); VM_NAMES+=("vpn")
-deploy_vm "openclaw" "LOCAL"     "claw"      ""                         "45" & PIDS+=($!); VM_NAMES+=("openclaw")
+deploy_vm "openclaw" "10.0.0.24" "claw"      ""                         "45" & PIDS+=($!); VM_NAMES+=("openclaw")
 
 echo ""
 echo "=== Waiting for deploys to complete ==="
